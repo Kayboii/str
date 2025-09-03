@@ -21,6 +21,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'supersecret';
 
+// Ensure uploads folder exists
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 // DB init
 const dbPromise = open({
   filename: path.join(__dirname, 'database.sqlite'),
@@ -51,7 +55,7 @@ const dbPromise = open({
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.use(session({
   secret: SESSION_SECRET,
@@ -65,7 +69,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Multer setup
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    const userDir = path.join(__dirname, 'uploads', String(req.session.user.id));
+    const userDir = path.join(UPLOADS_DIR, String(req.session.user.id));
     fs.mkdirSync(userDir, { recursive: true });
     cb(null, userDir);
   },
@@ -136,7 +140,7 @@ app.get('/file/:shareId', async (req, res) => {
   const db = await dbPromise;
   const file = await db.get('SELECT * FROM files WHERE share_id = ?', shareId);
   if (!file) return res.status(404).send('File not found');
-  const filePath = path.join(__dirname, 'uploads', String(file.user_id), file.filename);
+  const filePath = path.join(UPLOADS_DIR, String(file.user_id), file.filename);
   res.download(filePath, file.originalname);
 });
 
@@ -162,7 +166,7 @@ app.post('/delete/:id', requireLogin, async (req, res) => {
   const db = await dbPromise;
   const file = await db.get('SELECT * FROM files WHERE id = ? AND user_id = ?', [id, req.session.user.id]);
   if (file) {
-    const filePath = path.join(__dirname, 'uploads', String(file.user_id), file.filename);
+    const filePath = path.join(UPLOADS_DIR, String(file.user_id), file.filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     await db.run('DELETE FROM files WHERE id = ?', id);
   }
@@ -173,10 +177,7 @@ app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
 });
 
-app.listen(PORT, () => console.log(`KAYBOII'S STORAGE SITE v3 running on http://localhost:${PORT}`));
-
-const PORT = process.env.PORT || 3000;
-
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`KAYBOII'S STORAGE SITE v3 running on port ${PORT}`);
 });
